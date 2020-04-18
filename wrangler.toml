@@ -1,0 +1,6 @@
+name = "fictra"
+type = "javascript"
+account_id = "5965ad5ef865eef069db1488ce347d1d"
+workers_dev = true
+route = ""
+zone_id = ""
