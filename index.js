@@ -2,22 +2,6 @@ addEventListener('fetch', event => {
   event.respondWith(handleRequest(event.request))
 })
 
-  
-/**
- * Respond with the modified body of the response
- * fetched from of ttwo variants
- * @param {Request} request
- */
-async function handleRequest(request) {
-  // fecthing the variants from API
-  const url = "https://cfw-takehome.developers.workers.dev/api/variants";
-  const response = await fetch(url);
-  const data = await response.json();
-  
-  // Getting the last url visited from Cookies
-  const variant = getVariant(data.variants, request.headers.get('Cookie'))
-  return reroute(variant)
-}
 
 class HeaderRewriter {
   element(element) {
@@ -56,6 +40,7 @@ class ParagraphRewriter {
   }
 }
 
+
 // Modyfies the h1 header and the paragraph
 const rewriter = new HTMLRewriter()
   .on('h1', new HeaderRewriter())
@@ -63,20 +48,32 @@ const rewriter = new HTMLRewriter()
   .on('a#url', new LinkRewriter())
 
 
+  
 /**
- * Fetches the url, and modifies the body
- * from the response before returning it
- * @param {String} url 
+ * Respond with the modified body of the response
+ * fetched from of ttwo variants
+ * @param {Request} request
  */
-async function reroute(url) {
+async function handleRequest(request) {
+  // fecthing the variants from API
+  const response = await fetch("https://cfw-takehome.developers.workers.dev/api/variants");
+  const data = await response.json();
+  
+  // Getting the last url visited from Cookies
+  const variant = getVariant(data.variants, request.headers.get('Cookie'))
+  
   const expires = new Date();
   expires.setDate(expires.getDate() + 7);
-  return new Response((await rewriter.transform(await fetch(url))).body, {
+  
+  let res = await rewriter.transform(await fetch(variant));
+  res = new Response(res.body, {
     headers: {
       'Content-Type': 'text/html', 
-      'Set-Cookie':`lastUrlVisited=${url};Expires=${expires.toGMTString()};`
+      'Set-Cookie':`lastUrlVisited=${variant};Expires=${expires.toGMTString()};`
     }
-  }) 
+  })
+
+  return res
 }
 
 /**
@@ -92,6 +89,8 @@ function getVariant(urls, cookie){
     
     if(cookies){
       const url = getUrlFromCookie(cookies[0])
+      console.log(url);
+      console.log(url === urls[0]);
       if(url === urls[0]){
         return urls[1]
       }
