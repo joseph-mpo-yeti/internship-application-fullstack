@@ -2,6 +2,23 @@ addEventListener('fetch', event => {
   event.respondWith(handleRequest(event.request))
 })
 
+  
+/**
+ * Respond with the modified body of the response
+ * fetched from of ttwo variants
+ * @param {Request} request
+ */
+async function handleRequest(request) {
+  // fecthing the variants from API
+  const url = "https://cfw-takehome.developers.workers.dev/api/variants";
+  const response = await fetch(url);
+  const data = await response.json();
+  
+  // Getting the last url visited from Cookies
+  const variant = getVariant(data.variants, request.headers.get('Cookie'))
+  return reroute(variant)
+}
+
 class HeaderRewriter {
   element(element) {
     element.replace(`<h1 style="font-size: 1.5rem;margin 15px;">Hello World!</h1>`, {
@@ -51,47 +68,30 @@ const rewriter = new HTMLRewriter()
  * from the response before returning it
  * @param {String} url 
  */
-function reroute(url) {
+async function reroute(url) {
   const expires = new Date();
   expires.setDate(expires.getDate() + 7);
-  const res = new Response(url, {
+  return new Response((await rewriter.transform(await fetch(url))).body, {
     headers: {
-      'Set-Cookie':`lastUrlVisited=${url};Expires=${expires.toGMTString()}`
+      'Content-Type': 'text/html', 
+      'Set-Cookie':`lastUrlVisited=${url};Expires=${expires.toGMTString()};`
     }
-  });
-
-  return res;
+  }) 
 }
 
 /**
- * Respond with the modified body of the response
- * fetched from of ttwo variants
- * @param {Request} request
+ * Retrieves the variant not visited from the cookie
+ * @param {Array} urls variants
+ * @param {String} cookie string retrieved for cookies
+ * @returns a string URL to be redirected to
  */
-async function handleRequest(request) {
-  // fecthing the variants from API
-  const url = "https://cfw-takehome.developers.workers.dev/api/variants";
-  const response = await fetch(url);
-  const data = await response.json();
-
-  // Getting the last url visited from Cookies
-  console.log("cookie", request.headers.get('Cookie'));
-  const variant = getVariant(data.variants, request.headers.get('Cookie'))
-
-  
-  return fetch(reroute(variant));  
-}
-
-
 function getVariant(urls, cookie){
   if(cookie){
     const cookieRegex = new RegExp(/lastUrlVisited\=(.+)/ig);
     const cookies = cookie.match(cookieRegex);
-    console.log("cookies matching", cookies);
+    
     if(cookies){
       const url = getUrlFromCookie(cookies[0])
-      console.log("cookieUrl", url);
-      console.log(url === urls[0]);
       if(url === urls[0]){
         return urls[1]
       }
@@ -101,7 +101,11 @@ function getVariant(urls, cookie){
   return urls[0]
 }
 
-
+/**
+ * Retrieves the url from a cookie
+ * @param {String} cookie 
+ * @returns a string URL
+ */
 function getUrlFromCookie(cookie){
   return cookie.split('=')[1]
 }
