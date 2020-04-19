@@ -2,7 +2,6 @@ addEventListener('fetch', event => {
   event.respondWith(handleRequest(event.request))
 })
 
-
 class HeaderRewriter {
   element(element) {
     element.replace(`<h1 style="font-size: 1.5rem;margin 15px;">Hello World!</h1>`, {
@@ -40,7 +39,6 @@ class ParagraphRewriter {
   }
 }
 
-
 // Modyfies the h1 header and the paragraph
 const rewriter = new HTMLRewriter()
   .on('h1', new HeaderRewriter())
@@ -48,63 +46,67 @@ const rewriter = new HTMLRewriter()
   .on('a#url', new LinkRewriter())
 
 
-  
 /**
- * Respond with the modified body of the response
- * fetched from of ttwo variants
+ * Fetches the url, and modifies the body
+ * from the response before returning it
+ * @param {String} url 
+ */
+async function transform(url) {
+  const res = await fetch(url)
+  return rewriter.transform(res);
+}
+
+/**
+ * Handles routing
  * @param {Request} request
  */
 async function handleRequest(request) {
-  // fecthing the variants from API
-  const response = await fetch("https://cfw-takehome.developers.workers.dev/api/variants");
+  const url = "https://cfw-takehome.developers.workers.dev/api/variants";
+  
+  // Handling request for favicon
+  if(request.url.indexOf('favicon') !== -1){
+    return await fetch(url+"/favicon.co", request);
+  }
+
+  // Fetching variants
+  const response = await fetch(url);
   const data = await response.json();
+  const urls = data.variants;
+
+  // Retrieving the variant that was not last visited
+  const variant = getVariant(urls, request.headers.get('Cookie'))
   
-  // Getting the last url visited from Cookies
-  const variant = getVariant(data.variants, request.headers.get('Cookie'))
-  
+  // Cookie expires in 7 days
   const expires = new Date();
   expires.setDate(expires.getDate() + 7);
   
-  let res = await rewriter.transform(await fetch(variant));
-  res = new Response(res.body, {
-    headers: {
-      'Content-Type': 'text/html', 
-      'Set-Cookie':`lastUrlVisited=${variant};Expires=${expires.toGMTString()};`
-    }
-  })
-
-  return res
+  return new Response((await transform(variant)).body, {
+      headers: {
+        'Content-Type': 'text/html',
+        'Set-Cookie': `lastUrlVisited=${variant};Expires=${expires.toGMTString()};`
+      }
+  });  
 }
 
 /**
- * Retrieves the variant not visited from the cookie
- * @param {Array} urls variants
- * @param {String} cookie string retrieved for cookies
- * @returns a string URL to be redirected to
+ * Gets the url that was not last visited
+ * @param {Array<String>} urls 
+ * @param {String} cookieStr 
  */
-function getVariant(urls, cookie){
-  if(cookie){
-    const cookieRegex = new RegExp(/lastUrlVisited\=(.+)/ig);
-    const cookies = cookie.match(cookieRegex);
-    
-    if(cookies){
-      const url = getUrlFromCookie(cookies[0])
-      console.log(url);
-      console.log(url === urls[0]);
-      if(url === urls[0]){
+function getVariant(urls, cookieStr){
+  const regex = new RegExp(/lastUrlVisited\=.+/ig)
+  if(cookieStr){
+    const cookiesArray = cookieStr.match(regex);
+    if(cookiesArray){
+      const cookie = cookiesArray[0].split('=')[1]
+      if(cookie === urls[0]){
         return urls[1]
       }
+
+      return urls[0]
     }
   }
 
-  return urls[0]
-}
-
-/**
- * Retrieves the url from a cookie
- * @param {String} cookie 
- * @returns a string URL
- */
-function getUrlFromCookie(cookie){
-  return cookie.split('=')[1]
+  // Picks a variant randomly
+  return urls[Math.round(Math.random())]
 }
